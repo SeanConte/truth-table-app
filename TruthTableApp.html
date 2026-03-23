@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Truth Table Visualizer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 20px; line-height: 1.6; }
+    .container { max-width: 1400px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { color: #333; margin-bottom: 20px; font-size: 1.8rem; }
+    
+    .statement-list { margin-bottom: 20px; }
+    .statement-item { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; padding: 15px; background: #f9f9f9; border-radius: 4px; border: 2px solid #e0e0e0; }
+    .statement-item .control-group { flex: 1; }
+    .statement-number { font-weight: bold; color: #666; margin-right: 10px; align-self: center; }
+    
+    .control-group { display: flex; flex-direction: column; gap: 5px; }
+    label { font-weight: 600; font-size: 0.9rem; color: #555; }
+    select, input { padding: 8px 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 1rem; width: 100%; }
+    .formula-help { font-size: 0.88rem; color: #666; margin-top: 2px; }
+    .formula-help code { background: #efefef; padding: 1px 5px; border-radius: 4px; font-family: 'Courier New', monospace; }
+    
+    button { padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; font-weight: 600; transition: background 0.2s; }
+    button:hover { background: #555; }
+    button.remove-btn { background: #c62828; padding: 6px 12px; font-size: 0.9rem; }
+    button.remove-btn:hover { background: #b71c1c; }
+    button.add-btn { background: #2e7d32; margin-bottom: 15px; }
+    button.add-btn:hover { background: #1b5e20; }
+    
+    .action-buttons { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; align-items: center; }
+    .clear-buttons { display: flex; gap: 10px; margin-top: 10px; }
+    .clear-buttons button { background: #999; font-size: 0.9rem; padding: 6px 12px; }
+    .clear-buttons button:hover { background: #888; }
+    
+    .formula-display { 
+      font-size: 1.35rem; 
+      font-weight: 700; 
+      padding: 15px; 
+      background: #f9f9f9; 
+      border: 2px solid #ddd; 
+      margin-bottom: 20px; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Symbol', 'Cambria Math', 'DejaVu Sans', sans-serif; 
+      cursor: pointer; 
+      user-select: none; 
+      text-align: center; 
+      white-space: nowrap;
+      overflow-x: auto;
+    }
+    .formula-display:hover { background: #f0f0f0; }
+    .formula-display .char { display: inline-block; padding: 2px 4px; border-radius: 3px; transition: all 0.2s; }
+    .formula-display .char.highlight-scope { background: #ffeb3b; font-weight: bold; }
+    .formula-display .char.highlight-left { background: #ffd6d6; font-weight: bold; }
+    .formula-display .char.highlight-right { background: #d6ffe0; font-weight: bold; }
+    .formula-display .char.highlight-connective { color: #9c27b0; font-weight: 900; font-size: 2.0rem; animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.9; } }
+    .formula-display .char.highlight-left { color: #e63946; font-weight: bold; }
+    .formula-display .char.highlight-right { color: #06d6a0; font-weight: bold; }
+    
+    .table-container { overflow-x: auto; margin-top: 20px; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; font-family: 'Courier New', monospace; font-size: 1.1rem; }
+    th, td { padding: 14px; text-align: center; border: 1px solid #ddd; transition: all 0.2s; user-select: none; }
+    th { background: #888; color: white; font-weight: bold; position: sticky; top: 0; z-index: 10; cursor: pointer; }
+    th:hover { background: #777; }
+    th.atom-header { background: #aaa; cursor: default; }
+    th.atom-header:hover { background: #aaa; }
+    th.main-formula { background: #555; cursor: default; }
+    th.main-formula:hover { background: #555; }
+    th.collapsed { opacity: 0.5; }
+    th.hidden-column { display: none; }
+    
+    td { background: white; cursor: pointer; font-weight: bold; min-width: 50px; }
+    td.atom-cell { background: #f5f5f5; }
+    td.editable { background: #fafafa; }
+    td.editable:hover { background: #f0f0f0; }
+    td.main-statement-cell { background: #f8f8f8; }
+    td.main-statement-cell:hover { background: #f0f0f0; }
+    td.editable:empty::before, td.atom-cell:empty::before, td.main-statement-cell:empty::before { content: '·'; color: #ccc; font-size: 1.5rem; }
+    td.selected { background: #e1bee7 !important; box-shadow: inset 0 0 0 2px #9c27b0; color: #333; font-weight: bold; position: relative; z-index: 3; }
+    td.operand-left { background: #ffcccb !important; box-shadow: inset 0 0 0 2px #e63946; font-weight: bold; position: relative; z-index: 2; }
+    td.operand-right { background: #c7f9cc !important; box-shadow: inset 0 0 0 2px #06d6a0; font-weight: bold; position: relative; z-index: 2; }
+    td.dimmed { opacity: 0.2; }
+
+    /* Column-focus (header click) styling: paler than cell-focus and does NOT enable cycling */
+    td.col-selected { background: #f3e5f5 !important; box-shadow: inset 0 0 0 2px #b388ff; color: #333; position: relative; z-index: 1; font-weight: 600; }
+    td.col-operand-left { background: #ffe3e3 !important; box-shadow: inset 0 0 0 2px #f28b82; position: relative; z-index: 1; font-weight: 600; }
+    td.col-operand-right { background: #ddfbe0 !important; box-shadow: inset 0 0 0 2px #81c995; position: relative; z-index: 1; font-weight: 600; }
+    td.col-dimmed { opacity: 0.45; }
+    td.correct { background: #d4edda !important; }
+    td.incorrect { background: #f8d7da !important; }
+    td.hidden-column { display: none; }
+    
+    .instructions { background: #f0f0f0; padding: 15px; border-radius: 4px; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.8; border: 2px solid #ddd; }
+    .instructions strong { color: #333; }
+    .error { background: #ffebee; color: #c62828; padding: 15px; border-radius: 4px; border: 2px solid #c62828; margin-bottom: 20px; }
+    .feedback { background: #e8f5e9; color: #2e7d32; padding: 15px; border-radius: 4px; border: 2px solid #4caf50; margin-bottom: 20px; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 1000; }
+    .modal-backdrop.hidden { display: none; }
+    .passkey-modal { width: min(460px, 100%); background: white; border-radius: 10px; padding: 22px; box-shadow: 0 18px 40px rgba(0,0,0,0.25); }
+    .passkey-modal h2 { font-size: 1.2rem; margin-bottom: 10px; color: #333; }
+    .passkey-modal p { margin-bottom: 14px; color: #555; }
+    .passkey-row { display: flex; gap: 10px; align-items: center; }
+    .passkey-row input { flex: 1; }
+    .peek-btn { background: #777; white-space: nowrap; }
+    .peek-btn:hover { background: #666; }
+    .passkey-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+    .cancel-btn { background: #999; }
+    .cancel-btn:hover { background: #888; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Interactive Truth Table Builder</h1>
+    <div class="instructions">
+      <strong>How to use:</strong> Add statements to compare. Click a cell to see its dependencies (expands subformulas + shows highlighting). Click again to cycle through blank → T → F. Main statement columns are lightly shaded.
+      <br><strong>Colors:</strong> Purple (pulsing) = selected cell/connective, Red = left operand, Green = right operand, Yellow = scope.
+    </div>
+    
+    <div id="statement-list" class="statement-list"></div>
+    <button id="add-statement" class="add-btn">+ Add Statement</button>
+    <button id="generate" style="display:none;">Generate Table</button>
+    
+    <div class="action-buttons" id="action-buttons" style="display: none;">
+      <button id="fill-reference">Fill Reference Columns</button>
+      <button id="check-work">Check Work</button>
+      <button id="solve-visible">Solve Visible Cells</button>
+      <button id="solve-all">Expand & Solve All</button>
+    </div>
+    <div class="clear-buttons" id="clear-buttons" style="display: none;">
+      <button id="clear-reference">Clear Reference Columns</button>
+      <button id="clear-ops">Clear Operation Columns</button>
+    </div>
+    
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="feedback" class="feedback" style="display: none;"></div>
+    <div id="formula-display" class="formula-display" style="display: none;"></div>
+    <div id="table-container" class="table-container"></div>
+  </div>
+
+  <div id="passkey-backdrop" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="passkey-modal" role="dialog" aria-modal="true" aria-labelledby="passkey-title">
+      <h2 id="passkey-title">Instructor Passkey Required</h2>
+      <p>If you're an instructor, contact Sean (Sean.Conte@ccd.edu) in order to obtain the passkey.</p>
+      <div class="passkey-row">
+        <input id="passkey-input" type="password" inputmode="numeric" autocomplete="off" placeholder="Enter passkey">
+        <button id="passkey-peek" type="button" class="peek-btn">Peek</button>
+      </div>
+      <div class="passkey-actions">
+        <button id="passkey-cancel" type="button" class="cancel-btn">Cancel</button>
+        <button id="passkey-submit" type="button">Continue</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const EXAMPLES = [
+      { label: '-- Select an example --', value: '' },
+      { group: 'Simple (Single Connective)', options: [
+        { label: 'A · B (Conjunction)', value: 'A · B' },
+        { label: 'A ∨ B (Disjunction)', value: 'A ∨ B' },
+        { label: 'A → B (Conditional)', value: 'A → B' },
+        { label: 'A ↔ B (Biconditional)', value: 'A ↔ B' },
+        { label: '¬A (Negation)', value: '¬A' }
+      ]},
+      { group: 'Two Connectives', options: [
+        { label: '¬(A · B) (Negated conjunction)', value: '¬(A · B)' },
+        { label: '¬(A ∨ B) (Negated disjunction)', value: '¬(A ∨ B)' },
+        { label: '(A · B) → C (Conjunction antecedent)', value: '(A · B) → C' },
+        { label: 'A → (B · C) (Conjunction consequent)', value: 'A → (B · C)' },
+        { label: '(A ∨ B) → C (Disjunction antecedent)', value: '(A ∨ B) → C' },
+        { label: 'A → (B ∨ C) (Disjunction consequent)', value: 'A → (B ∨ C)' },
+        { label: '(A · B) ∨ C (Mixed operations)', value: '(A · B) ∨ C' }
+      ]},
+      { group: 'Three Connectives', options: [
+        { label: '(A → B) · (B → C) (Chained conditionals)', value: '(A → B) · (B → C)' },
+        { label: '(A · B) → (C · D) (Both sides compound)', value: '(A · B) → (C · D)' },
+        { label: 'A → (B → C) (Nested conditionals)', value: 'A → (B → C)' },
+        { label: '(A ∨ B) · (C ∨ D) (Distributed disjunction)', value: '(A ∨ B) · (C ∨ D)' },
+        { label: '¬A → (B · C) (Negation with compound)', value: '¬A → (B · C)' },
+        { label: '(A → B) ∨ (C → D) (Disjunction of conditionals)', value: '(A → B) ∨ (C → D)' }
+      ]},
+      { group: 'Complex (4+ Connectives)', options: [
+        { label: '((A · B) → C) ↔ (A → (B → C)) (Exportation)', value: '((A · B) → C) ↔ (A → (B → C))' },
+        { label: '(A → B) · (¬B) · A (Modus tollens setup)', value: '(A → B) · (¬B) · A' },
+        { label: '(A ∨ B) · ¬A → B (Disjunctive syllogism)', value: '(A ∨ B) · ¬A → B' },
+        { label: '¬(A · B) ↔ (¬A ∨ ¬B) (De Morgan\'s)', value: '¬(A · B) ↔ (¬A ∨ ¬B)' },
+        { label: '(A → B) · (B → C) → (A → C) (Hypothetical syllogism)', value: '(A → B) · (B → C) → (A → C)' }
+      ]},
+      { group: 'Advanced', options: [
+        { label: '((A → B) · (C → D)) → ((A · C) → (B · D)) (Constructive dilemma)', value: '((A → B) · (C → D)) → ((A · C) → (B · D))' },
+        { label: '(A ↔ B) ↔ ((A → B) · (B → A)) (Biconditional definition)', value: '(A ↔ B) ↔ ((A → B) · (B → A))' },
+        { label: '¬(A ∨ B) ↔ (¬A · ¬B) (De Morgan\'s other)', value: '¬(A ∨ B) ↔ (¬A · ¬B)' },
+        { label: '((A ∨ B) · (A → C) · (B → C)) → C (Proof by cases)', value: '((A ∨ B) · (A → C) · (B → C)) → C' },
+        { label: '(A ∨ (B · C)) ↔ (D ∨ (B · C)) (Shared subformula test)', value: '(A ∨ (B · C)) ↔ (D ∨ (B · C))' }
+      ]}
+    ];
+    
+    const PASSKEY = '72725';
+    const NodeType = {ATOM: 'atom', NOT: 'not', AND: 'and', OR: 'or', IF: 'if', IFF: 'iff'};
+    let idCounter = 0;
+    let statementCounter = 0;
+    let statements = [];
+    
+    function generateId() { return 'node_' + (++idCounter); }
+    function createAtom(name) { return { type: NodeType.ATOM, name, children: [], id: generateId() }; }
+    function createNot(child) { return { type: NodeType.NOT, children: [child], id: generateId() }; }
+    function createBinary(type, left, right) { return { type, children: [left, right], id: generateId() }; }
+
+    function tokenize(formula) {
+      const tokens = []; let i = 0;
+      while (i < formula.length) {
+        const ch = formula[i], ch2 = formula.slice(i, i + 2), ch3 = formula.slice(i, i + 3);
+        if (ch === '¬' || ch === '~' || ch === '!') { tokens.push({ type: 'NOT', value: ch }); i++; }
+        else if (ch === '∧' || ch === '&' || ch === '·' || ch === '•') { tokens.push({ type: 'AND', value: ch }); i++; }
+        else if (ch === '∨' || ch === 'v' || ch === '|') { tokens.push({ type: 'OR', value: ch }); i++; }
+        else if (ch === '↔' || ch3 === '<->' || ch3 === '<=>' || ch2 === '<>') { tokens.push({ type: 'IFF', value: '↔' }); i += ch === '↔' ? 1 : (ch2 === '<>' ? 2 : 3); }
+        else if (ch === '→' || ch2 === '->' || ch2 === '=>') { tokens.push({ type: 'IF', value: '→' }); i += ch === '→' ? 1 : 2; }
+        else if (ch === '(') { tokens.push({ type: 'LPAREN', value: ch }); i++; }
+        else if (ch === ')') { tokens.push({ type: 'RPAREN', value: ch }); i++; }
+        else if (/\s/.test(ch)) { i++; }
+        else if (/[A-Z]/i.test(ch)) { let name = ''; while (i < formula.length && /[A-Z0-9]/i.test(formula[i])) { name += formula[i++]; } tokens.push({ type: 'ATOM', value: name }); }
+        else { i++; }
+      }
+      return tokens;
+    }
+
+    class Parser {
+      constructor(tokens) { this.tokens = tokens; this.pos = 0; }
+      peek() { return this.tokens[this.pos]; }
+      consume() { return this.tokens[this.pos++]; }
+      parseFormula() { return this.parseIff(); }
+      parseIff() { let left = this.parseIf(); while (this.peek() && this.peek().type === 'IFF') { this.consume(); left = createBinary(NodeType.IFF, left, this.parseIf()); } return left; }
+      parseIf() { let left = this.parseOr(); while (this.peek() && this.peek().type === 'IF') { this.consume(); left = createBinary(NodeType.IF, left, this.parseOr()); } return left; }
+      parseOr() { let left = this.parseAnd(); while (this.peek() && this.peek().type === 'OR') { this.consume(); left = createBinary(NodeType.OR, left, this.parseAnd()); } return left; }
+      parseAnd() { let left = this.parseNot(); while (this.peek() && this.peek().type === 'AND') { this.consume(); left = createBinary(NodeType.AND, left, this.parseNot()); } return left; }
+      parseNot() { if (this.peek() && this.peek().type === 'NOT') { this.consume(); return createNot(this.parseNot()); } return this.parseAtom(); }
+      parseAtom() { const tok = this.peek(); if (!tok) throw new Error('Unexpected end'); if (tok.type === 'ATOM') { this.consume(); return createAtom(tok.value); } if (tok.type === 'LPAREN') { this.consume(); const inner = this.parseFormula(); if (!this.peek() || this.peek().type !== 'RPAREN') throw new Error('Expected )'); this.consume(); return inner; } throw new Error('Unexpected: ' + tok.type); }
+    }
+
+    function parseFormula(s) {
+      const parser = new Parser(tokenize(s));
+      const result = parser.parseFormula();
+      if (parser.peek()) throw new Error('Unexpected token: ' + parser.peek().value);
+      return result;
+    }
+    function serializeFormula(n) {
+      if (!n) return '';
+      if (n.type === NodeType.ATOM) return n.name;
+      if (n.type === NodeType.NOT) return '¬' + serializeFormula(n.children[0]);
+      if (n.type === NodeType.AND) return '(' + serializeFormula(n.children[0]) + ' · ' + serializeFormula(n.children[1]) + ')';
+      if (n.type === NodeType.OR) return '(' + serializeFormula(n.children[0]) + ' ∨ ' + serializeFormula(n.children[1]) + ')';
+      if (n.type === NodeType.IF) return '(' + serializeFormula(n.children[0]) + ' → ' + serializeFormula(n.children[1]) + ')';
+      if (n.type === NodeType.IFF) return '(' + serializeFormula(n.children[0]) + ' ↔ ' + serializeFormula(n.children[1]) + ')';
+      return '';
+    }
+
+    function collectAtoms(nodes) {
+      const atoms = new Set();
+      nodes.forEach(function(n) {
+        function visit(nd) { if (!nd) return; if (nd.type === NodeType.ATOM) atoms.add(nd.name); if (nd.children) nd.children.forEach(visit); }
+        visit(n);
+      });
+      return Array.from(atoms).sort();
+    }
+
+    function collectSubformulas(nodes) {
+      const map = new Map();
+      nodes.forEach(function(n) {
+        function visit(nd) {
+          if (!nd) return;
+          if (nd.type !== NodeType.ATOM) {
+            const txt = serializeFormula(nd);
+            if (!map.has(txt)) map.set(txt, nd);
+          }
+          if (nd.children) nd.children.forEach(visit);
+        }
+        visit(n);
+      });
+      const formulas = Array.from(map.entries()).map(function(entry) { return { node: entry[1], text: entry[0], id: entry[1].id }; });
+      return formulas.sort(function(a, b) {
+        const dA = getDepth(a.node), dB = getDepth(b.node);
+        if (dA !== dB) return dA - dB;
+        return a.text.length - b.text.length;
+      });
+    }
+
+    function getDepth(n) { if (!n || !n.children || !n.children.length) return 0; return 1 + Math.max.apply(null, n.children.map(getDepth)); }
+    function evaluateNode(n, a) {
+      if (!n) return false;
+      if (n.type === NodeType.ATOM) return a[n.name] === true;
+      if (n.type === NodeType.NOT) return !evaluateNode(n.children[0], a);
+      if (n.type === NodeType.AND) return evaluateNode(n.children[0], a) && evaluateNode(n.children[1], a);
+      if (n.type === NodeType.OR) return evaluateNode(n.children[0], a) || evaluateNode(n.children[1], a);
+      if (n.type === NodeType.IF) { const l = evaluateNode(n.children[0], a), r = evaluateNode(n.children[1], a); return !l || r; }
+      if (n.type === NodeType.IFF) { const l = evaluateNode(n.children[0], a), r = evaluateNode(n.children[1], a); return l === r; }
+      return false;
+    }
+
+    function generateTruthTable(asts) {
+      const atoms = collectAtoms(asts);
+      const mainFormulas = [];
+
+      asts.forEach(function(ast) {
+        const txt = serializeFormula(ast);
+        mainFormulas.push({ node: ast, text: txt, id: ast.id });
+      });
+
+      // IMPORTANT:
+      // collectSubformulas() includes every non-atomic node — including each statement's root node.
+      // That creates an ID collision between the "subformula" header and the "main formula" header,
+      // and when subformulas are collapsed by default, the main header gets hidden too.
+      // So we exclude the root (main) formulas from the subformula list.
+      const mainIds = new Set(mainFormulas.map(function(mf) { return mf.id; }));
+      let subformulas = collectSubformulas(asts).filter(function(sf) { return !mainIds.has(sf.id); });
+      
+      const rows = [], n = Math.pow(2, atoms.length);
+      for (let i = n - 1; i >= 0; i--) {
+        const assignment = {}, row = { atoms: {}, subformulas: {}, mainFormulas: {} };
+        atoms.forEach(function(atom, idx) { const v = !!(i & (1 << (atoms.length - 1 - idx))); assignment[atom] = v; row.atoms[atom] = v; });
+        subformulas.forEach(function(sf) { row.subformulas[sf.id] = evaluateNode(sf.node, assignment); });
+        mainFormulas.forEach(function(mf) { row.mainFormulas[mf.id] = evaluateNode(mf.node, assignment); });
+        rows.push(row);
+      }
+      return { atoms, subformulas, mainFormulas, rows };
+    }
+
+    let currentTable = null, userAnswers = {}, collapsedColumns = new Set(), expandedBy = {}, atomNodeMap = {}, cellClickCount = {}, currentlySelectedCell = null, currentColumnFocusId = null;
+
+    function showError(m) { document.getElementById('error').textContent = m; document.getElementById('error').style.display = 'block'; document.getElementById('feedback').style.display = 'none'; }
+    function hideError() { document.getElementById('error').style.display = 'none'; }
+    function showFeedback(m) { document.getElementById('feedback').textContent = m; document.getElementById('feedback').style.display = 'block'; document.getElementById('error').style.display = 'none'; }
+    function hideFeedback() { document.getElementById('feedback').style.display = 'none'; }
+
+    function requestPasskey(onSuccess) {
+      const backdrop = document.getElementById('passkey-backdrop');
+      const input = document.getElementById('passkey-input');
+      const submitBtn = document.getElementById('passkey-submit');
+      const cancelBtn = document.getElementById('passkey-cancel');
+      const peekBtn = document.getElementById('passkey-peek');
+
+      function closeModal() {
+        backdrop.classList.add('hidden');
+        backdrop.setAttribute('aria-hidden', 'true');
+        input.value = '';
+        input.type = 'password';
+        peekBtn.textContent = 'Peek';
+        input.removeEventListener('keydown', handleKeydown);
+        submitBtn.onclick = null;
+        cancelBtn.onclick = null;
+        peekBtn.onmousedown = null;
+        peekBtn.onmouseup = null;
+        peekBtn.onmouseleave = null;
+        peekBtn.ontouchstart = null;
+        peekBtn.ontouchend = null;
+        peekBtn.ontouchcancel = null;
+        peekBtn.onclick = null;
+      }
+
+      function failAndClose() {
+        closeModal();
+        showError('Passkey entry canceled or incorrect.');
+      }
+
+      function submitPasskey() {
+        const entered = input.value.trim();
+        if (entered === PASSKEY) {
+          closeModal();
+          hideError();
+          onSuccess();
+        } else {
+          failAndClose();
+        }
+      }
+
+      function handleKeydown(e) {
+        if (e.key === 'Enter') submitPasskey();
+        if (e.key === 'Escape') failAndClose();
+      }
+
+      submitBtn.onclick = submitPasskey;
+      cancelBtn.onclick = failAndClose;
+      const revealPasskey = function() { input.type = 'text'; peekBtn.textContent = 'Hide'; };
+      const concealPasskey = function() { input.type = 'password'; peekBtn.textContent = 'Peek'; };
+      peekBtn.onmousedown = revealPasskey;
+      peekBtn.onmouseup = concealPasskey;
+      peekBtn.onmouseleave = concealPasskey;
+      peekBtn.ontouchstart = revealPasskey;
+      peekBtn.ontouchend = concealPasskey;
+      peekBtn.ontouchcancel = concealPasskey;
+      peekBtn.onclick = function(e) { e.preventDefault(); };
+      backdrop.onclick = function(e) {
+        if (e.target === backdrop) failAndClose();
+      };
+      input.addEventListener('keydown', handleKeydown);
+
+      hideError();
+      hideFeedback();
+      backdrop.classList.remove('hidden');
+      backdrop.setAttribute('aria-hidden', 'false');
+      input.focus();
+      input.select();
+    }
+
+    function saveStatementValues() {
+      statements.forEach(function(stmt) {
+        const exEl = document.getElementById('example-' + stmt.id);
+        const cuEl = document.getElementById('custom-' + stmt.id);
+        if (exEl) stmt.savedExample = exEl.value;
+        if (cuEl) stmt.savedCustom = cuEl.value;
+      });
+    }
+
+    function addStatement() {
+      saveStatementValues();
+      const id = ++statementCounter;
+      statements.push({ id: id, savedExample: '', savedCustom: '' });
+      renderStatementList();
+      updateGenerateButton();
+    }
+
+    function removeStatement(id) {
+      saveStatementValues();
+      statements = statements.filter(function(s) { return s.id !== id; });
+      renderStatementList();
+      updateGenerateButton();
+      if (statements.length === 0) {
+        document.getElementById('table-container').innerHTML = '';
+        document.getElementById('formula-display').style.display = 'none';
+        document.getElementById('action-buttons').style.display = 'none';
+        document.getElementById('clear-buttons').style.display = 'none';
+      }
+    }
+
+    function renderStatementList() {
+      const container = document.getElementById('statement-list');
+      container.innerHTML = '';
+      
+      statements.forEach(function(stmt, idx) {
+        const div = document.createElement('div');
+        div.className = 'statement-item';
+        
+        const numLabel = document.createElement('div');
+        numLabel.className = 'statement-number';
+        numLabel.textContent = 'Statement ' + (idx + 1);
+        div.appendChild(numLabel);
+        
+        const exampleGroup = document.createElement('div');
+        exampleGroup.className = 'control-group';
+        const exampleLabel = document.createElement('label');
+        exampleLabel.textContent = 'Examples:';
+        exampleGroup.appendChild(exampleLabel);
+        
+        const exampleSelect = document.createElement('select');
+        exampleSelect.id = 'example-' + stmt.id;
+        
+        exampleSelect.appendChild(new Option('-- Select an example --', ''));
+        EXAMPLES.forEach(function(item) {
+          if (item.group) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = item.group;
+            item.options.forEach(function(opt) {
+              optgroup.appendChild(new Option(opt.label, opt.value));
+            });
+            exampleSelect.appendChild(optgroup);
+          }
+        });
+        
+        exampleSelect.value = stmt.savedExample || '';
+        exampleSelect.addEventListener('change', function() {
+          if (this.value) {
+            document.getElementById('custom-' + stmt.id).value = '';
+          }
+        });
+        exampleGroup.appendChild(exampleSelect);
+        div.appendChild(exampleGroup);
+        
+        const customGroup = document.createElement('div');
+        customGroup.className = 'control-group';
+        const customLabel = document.createElement('label');
+        customLabel.textContent = 'Or custom formula:';
+        customGroup.appendChild(customLabel);
+        
+        const customInput = document.createElement('input');
+        customInput.type = 'text';
+        customInput.id = 'custom-' + stmt.id;
+        customInput.placeholder = 'e.g., (A · B) → C';
+        customInput.value = stmt.savedCustom || '';
+        customInput.addEventListener('input', function() {
+          if (this.value) {
+            document.getElementById('example-' + stmt.id).value = '';
+          }
+        });
+        customGroup.appendChild(customInput);
+
+        const customHelp = document.createElement('div');
+        customHelp.className = 'formula-help';
+        customHelp.innerHTML = 'Accepted: atoms like <code>A</code>, <code>P1</code>; negation <code>¬</code>/<code>~</code>/<code>!</code>; conjunction <code>·</code>/<code>&amp;</code>/<code>∧</code>; disjunction <code>∨</code>/<code>v</code>/<code>|</code>; conditional <code>→</code>/<code>-&gt;</code>/<code>=&gt;</code>; biconditional <code>↔</code>/<code>&lt;-&gt;</code>/<code>&lt;=&gt;</code>/<code>&lt;&gt;</code>; parentheses <code>( )</code>.';
+        customGroup.appendChild(customHelp);
+        div.appendChild(customGroup);
+        
+        if (statements.length > 1) {
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'remove-btn';
+          removeBtn.textContent = 'Remove';
+          removeBtn.addEventListener('click', function() { removeStatement(stmt.id); });
+          div.appendChild(removeBtn);
+        }
+        
+        container.appendChild(div);
+      });
+    }
+
+    function updateGenerateButton() {
+      const genBtn = document.getElementById('generate');
+      genBtn.style.display = statements.length > 0 ? 'inline-block' : 'none';
+    }
+
+    function getStatementFormulas() {
+      const formulas = [];
+      statements.forEach(function(stmt) {
+        const exampleVal = document.getElementById('example-' + stmt.id).value;
+        const customVal = document.getElementById('custom-' + stmt.id).value.trim();
+        const formula = customVal || exampleVal;
+        if (formula) formulas.push(formula);
+      });
+      return formulas;
+    }
+
+    function cssEscapeAttrValue(v) {
+      v = String(v);
+      if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(v);
+      // Fallback: escape backslashes and quotes for use inside a double-quoted attribute selector.
+      return v.split('\\').join('\\\\').split('"').join('\\\"');
+    }
+
+    function clearHighlights() {
+      document.querySelectorAll('td').forEach(function(td) { td.classList.remove('selected', 'operand-left', 'operand-right', 'dimmed', 'col-selected', 'col-operand-left', 'col-operand-right', 'col-dimmed'); });
+      const d = document.getElementById('formula-display');
+      if (d) d.querySelectorAll('.char').forEach(function(c) {
+        c.classList.remove('highlight-scope','highlight-connective','highlight-left','highlight-right');
+      });
+      currentlySelectedCell = null; cellClickCount = {}; currentColumnFocusId = null;
+    }
+
+    function clearCellFocus() {
+      document.querySelectorAll('td').forEach(function(td) { td.classList.remove('selected', 'operand-left', 'operand-right', 'dimmed'); });
+      currentlySelectedCell = null;
+      cellClickCount = {};
+    }
+
+    function clearColumnFocus() {
+      document.querySelectorAll('td').forEach(function(td) { td.classList.remove('col-selected', 'col-operand-left', 'col-operand-right', 'col-dimmed'); });
+      currentColumnFocusId = null;
+    }
+
+    function setColumnFocus(tableColId, leftId, rightId, statementColId) {
+      clearCellFocus();
+      clearColumnFocus();
+      currentColumnFocusId = tableColId;
+
+      const stmtId = statementColId || tableColId;
+      // Statement highlighting
+      highlightFormulaByColumnId(stmtId);
+
+      // Column shading (pale, non-cycling)
+      const focusCols = new Set([tableColId]);
+      if (leftId) focusCols.add(leftId);
+      if (rightId) focusCols.add(rightId);
+
+      document.querySelectorAll('td.editable, td.atom-cell').forEach(function(td) {
+        // Atom columns use data-atom; operation/main/sub columns use data-id.
+        const key = td.classList.contains('atom-cell') ? ('@' + td.dataset.atom) : td.dataset.id;
+        if (!key) return;
+        if (key === tableColId) td.classList.add('col-selected');
+        else if (leftId && key === leftId) td.classList.add('col-operand-left');
+        else if (rightId && key === rightId) td.classList.add('col-operand-right');
+        else if (!focusCols.has(key)) td.classList.add('col-dimmed');
+      });
+    }
+
+    function resolveOperandColumnId(node, table) {
+      if (!node) return null;
+      if (node.type === NodeType.ATOM) return '@' + node.name;
+      // Prefer a column id that exists in this table (subformula or main formula)
+      const txt = serializeFormula(node);
+      const mf = table.mainFormulas.find(function(s) { return s.text === txt; });
+      if (mf) return mf.id;
+      const sf = table.subformulas.find(function(s) { return s.text === txt; });
+      if (sf) return sf.id;
+      return findColumnIdForNode(node);
+    }
+
+    function setColumnFocusFromFormula(sf, table, forceColId) {
+      const colId = forceColId || sf.id;
+      const n = sf.node;
+
+      // Determine operand columns robustly across node shapes (left/right vs children).
+      function getChild(node, i) {
+        if (!node) return null;
+        if (node.type === NodeType.NOT) {
+          return node.child || (node.children && node.children[0]) || null;
+        }
+        if (i === 0) return node.left || (node.children && node.children[0]) || null;
+        if (i === 1) return node.right || (node.children && node.children[1]) || null;
+        return null;
+      }
+
+      let leftId = null, rightId = null;
+      if (n) {
+        if (n.type === NodeType.NOT) {
+          const op = getChild(n, 0);
+          if (op) rightId = resolveOperandColumnId(op, table);
+        } else {
+          const left = getChild(n, 0);
+          const right = getChild(n, 1);
+          if (left) leftId = resolveOperandColumnId(left, table);
+          if (right) rightId = resolveOperandColumnId(right, table);
+        }
+      }
+
+      expandOperandColumn(colId, leftId);
+      expandOperandColumn(colId, rightId);
+      setColumnFocus(colId, leftId, rightId, colId);
+}
+
+    
+    function expandOperandColumn(parentId, cid) {
+      if (!cid) return;
+      // Atom columns use @A keys and are never collapsed.
+      if (cid[0] === '@') return;
+      if (!expandedBy[cid]) expandedBy[cid] = new Set();
+      expandedBy[cid].add(parentId);
+      if (collapsedColumns.has(cid)) collapsedColumns.delete(cid);
+      document.querySelectorAll('td[data-id="' + cid + '"]').forEach(function(td) {
+        if (!td.classList.contains('atom-cell') && !td.classList.contains('main-statement-cell')) td.classList.remove('hidden-column');
+      });
+      updateHeaderVisibility();
+    }
+
+function renderFormulaDisplay(formulas) {
+      const d = document.getElementById('formula-display');
+      if (!d) return;
+
+      // Build a tokenized, span-based display so we can highlight subexpressions
+      // across multiple statements.
+      function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      }
+
+      function renderNodeToHTML(node) {
+        const colId = findColumnIdForNode(node);
+
+        // Helpers to create individual character spans.
+        function chSpan(ch, extraClass, ownerId) {
+          const cls = extraClass ? ('char ' + extraClass) : 'char';
+          const ownerAttr = ownerId ? (' data-owner="' + esc(String(ownerId)) + '"') : '';
+          return '<span class="' + cls + '" data-col="' + esc(colId) + '"' + ownerAttr + '>' + esc(ch) + '</span>';
+        }
+
+        if (!node) return '';
+        if (node.type === 'atom') {
+          return '<span class="node" data-col="' + esc(colId) + '" data-node="' + esc(String(node.id||'')) + '">' + chSpan(node.name) + '</span>';
+        }
+        if (node.type === 'not') {
+          const child = node.child || (node.children && node.children[0]);
+          return '<span class="node" data-col="' + esc(colId) + '" data-node="' + esc(String(node.id||'')) + '">' +
+            chSpan('¬', 'connective main-connective', node.id) +
+            '<span class="operand operand-right" data-owner="' + esc(String(node.id||'')) + '">' + renderNodeToHTML(child) + '</span>' +
+            '</span>';
+        }
+        // Binary operators (and/or/if/iff) are represented by specific node.type values
+        // (see NodeType constants). Render them with the same symbols used elsewhere.
+        if (node.type === NodeType.AND || node.type === NodeType.OR || node.type === NodeType.IF || node.type === NodeType.IFF) {
+          const op = (node.type === NodeType.AND) ? '·' :
+                     (node.type === NodeType.OR)  ? '∨' :
+                     (node.type === NodeType.IF)  ? '→' :
+                     '↔';
+          const left = node.left || (node.children && node.children[0]);
+          const right = node.right || (node.children && node.children[1]);
+          return '<span class="node" data-col="' + esc(colId) + '" data-node="' + esc(String(node.id||'')) + '">' +
+            chSpan('(') +
+            '<span class="operand operand-left" data-owner="' + esc(String(node.id||'')) + '">' + renderNodeToHTML(left) + '</span>' +
+            chSpan(op, 'connective main-connective', node.id) +
+            '<span class="operand operand-right" data-owner="' + esc(String(node.id||'')) + '">' + renderNodeToHTML(right) + '</span>' +
+            chSpan(')') +
+            '</span>';
+        }
+        // Fallback: just stringify.
+        return '<span class="node" data-col="' + esc(colId) + '" data-node="' + esc(String(node.id||'')) + '">' + esc(serializeFormula(node)) + '</span>';
+      }
+
+      // Use the already-parsed ASTs so ids match the table's nodes.
+      const lines = (currentTable && currentTable.mainFormulas) ? currentTable.mainFormulas : [];
+      const htmlLines = lines.map(function(mf, i) {
+        return '<span class="formula-line" data-line="' + (i+1) + '">' +
+          '<span class="line-label">' + (i+1) + '.</span> ' +
+          renderNodeToHTML(mf.node) +
+        '</span>';
+      });
+
+      d.innerHTML = htmlLines.join('<span class="line-sep"> | </span>');
+      d.style.display = 'block';
+      d.onclick = clearHighlights;
+    }
+
+    function highlightFormulaByColumnId(colId) {
+      const d = document.getElementById('formula-display');
+      if (!d) return;
+      // Clear existing highlights
+      d.querySelectorAll('.char').forEach(function(c) { c.classList.remove('highlight-scope','highlight-connective','highlight-left','highlight-right'); });
+
+      // Highlight any nodes (across all lines) that correspond to this column id.
+      d.querySelectorAll('.node[data-col="' + cssEscapeAttrValue(colId) + '"]').forEach(function(nodeSpan) {
+        nodeSpan.querySelectorAll('.char').forEach(function(c) { c.classList.add('highlight-scope'); });
+        var nid = nodeSpan.getAttribute('data-node') || '';
+        nodeSpan.querySelectorAll('.char.main-connective[data-owner="' + cssEscapeAttrValue(nid) + '"]').forEach(function(c) { c.classList.add('highlight-connective'); });
+        // Left/right operand highlighting within the scope of this connective
+        var leftWrap = nodeSpan.querySelector('.operand-left[data-owner="' + cssEscapeAttrValue(nid) + '"]');
+        if (leftWrap) leftWrap.querySelectorAll('.char').forEach(function(c) { c.classList.add('highlight-left'); });
+        var rightWrap = nodeSpan.querySelector('.operand-right[data-owner="' + cssEscapeAttrValue(nid) + '"]');
+        if (rightWrap) rightWrap.querySelectorAll('.char').forEach(function(c) { c.classList.add('highlight-right'); });
+      });
+    }
+function findColumnIdForNode(child) {
+      const txt = serializeFormula(child);
+      const f = currentTable.subformulas.find(function(sf) { return sf.text === txt; });
+      if (f) return f.id;
+      const mf = currentTable.mainFormulas.find(function(mf) { return mf.text === txt; });
+      return mf ? mf.id : child.id;
+    }
+
+    function expandDirectChildren(parentId, sf) {
+      const n = sf.node;
+      if (!n.children || !n.children.length) return;
+      n.children.forEach(function(child) {
+        const cid = findColumnIdForNode(child);
+        if (!expandedBy[cid]) expandedBy[cid] = new Set();
+        expandedBy[cid].add(parentId);
+        if (collapsedColumns.has(cid)) collapsedColumns.delete(cid);
+        document.querySelectorAll('td[data-id="' + cid + '"]').forEach(function(td) { 
+          if (!td.classList.contains('atom-cell') && !td.classList.contains('main-statement-cell')) td.classList.remove('hidden-column'); 
+        });
+      });
+      updateHeaderVisibility();
+    }
+
+    function removeParentFromChildren(parentId, sf) {
+      const n = sf.node;
+      if (!n.children || !n.children.length) return;
+      n.children.forEach(function(child) {
+        const cid = findColumnIdForNode(child);
+        if (expandedBy[cid]) {
+          expandedBy[cid].delete(parentId);
+          if (expandedBy[cid].size === 0) {
+            if (!collapsedColumns.has(cid)) {
+              collapsedColumns.add(cid);
+              document.querySelectorAll('td[data-id="' + cid + '"]').forEach(function(td) { 
+                if (!td.classList.contains('atom-cell') && !td.classList.contains('main-statement-cell')) td.classList.add('hidden-column'); 
+              });
+            }
+            const cf = currentTable.subformulas.find(function(s) { return s.id === cid; });
+            if (cf) removeParentFromChildren(cid, cf);
+          }
+        }
+      });
+      updateHeaderVisibility();
+    }
+
+    function renderTable(table) {
+      const c = document.getElementById('table-container');
+      c.innerHTML = '';
+      const tbl = document.createElement('table');
+      atomNodeMap = {};
+      
+      function buildAtomMap(nodes) {
+        nodes.forEach(function(n) {
+          function visit(nd) { if (!nd) return; if (nd.type === NodeType.ATOM && !atomNodeMap[nd.name]) atomNodeMap[nd.name] = nd.id; if (nd.children) nd.children.forEach(visit); }
+          visit(n);
+        });
+      }
+      buildAtomMap(table.mainFormulas.map(function(mf) { return mf.node; }));
+      
+      const thead = document.createElement('thead'), hr = document.createElement('tr');
+      table.atoms.forEach(function(a) {
+        const th = document.createElement('th');
+        th.textContent = a;
+        th.className = 'atom-header';
+        th.dataset.atom = a;
+        th.addEventListener('click', function() {
+          // Atom columns don't have data-id; use a stable prefixed key.
+          const colKey = '@' + a;
+          const stmtColId = atomNodeMap[a] || a;
+          setColumnFocus(colKey, null, null, stmtColId);
+        });
+        hr.appendChild(th);
+      });
+      
+      table.subformulas.forEach(function(sf) {
+        const th = document.createElement('th'); 
+        th.textContent = sf.text; 
+        th.dataset.id = sf.id;
+        th.addEventListener('click', function(e) {
+          // Single-click focuses/highlights; collapse/expand is on double-click.
+          expandDirectChildren(sf.id, sf);
+          setColumnFocusFromFormula(sf, table, sf.id);
+        });
+        th.addEventListener('dblclick', function(e) {
+          clearHighlights();
+          toggleColumn(sf.id, sf);
+        });
+        hr.appendChild(th);
+      });
+      
+      table.mainFormulas.forEach(function(mf) {
+        const th = document.createElement('th'); 
+        th.textContent = mf.text;
+        th.dataset.id = mf.id;
+        th.classList.add('main-formula');
+        th.addEventListener('click', function() {
+          const stmtId = findColumnIdForNode(mf.node);
+          setColumnFocusFromFormula(mf, table, mf.id);
+          // main formula display-id may differ when it duplicates an earlier subformula
+          highlightFormulaByColumnId(stmtId);
+        });
+        hr.appendChild(th);
+      });
+      
+      thead.appendChild(hr); tbl.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      table.rows.forEach(function(row, ri) {
+        const tr = document.createElement('tr');
+        table.atoms.forEach(function(a) {
+          const td = document.createElement('td'), ck = 'atom-' + ri + '-' + a;
+          td.textContent = userAnswers[ck] || ''; td.className = 'atom-cell'; td.dataset.atom = a; td.dataset.row = ri;
+          if (atomNodeMap[a]) td.dataset.id = atomNodeMap[a];
+          td.addEventListener('click', function() { handleAtomCellClick(td, a, ck); });
+          tr.appendChild(td);
+        });
+        table.subformulas.forEach(function(sf) {
+          const td = document.createElement('td'), ck = ri + '-' + sf.id;
+          td.textContent = userAnswers[ck] || ''; td.className = 'editable'; td.dataset.id = sf.id; td.dataset.row = ri; td.subformula = sf;
+          td.addEventListener('click', function() { handleCellClick(td, sf, row, table, ck); });
+          if (collapsedColumns.has(sf.id)) td.classList.add('hidden-column');
+          tr.appendChild(td);
+        });
+        table.mainFormulas.forEach(function(mf) {
+          const td = document.createElement('td'), ck = ri + '-' + mf.id;
+          td.textContent = userAnswers[ck] || ''; td.className = 'main-statement-cell editable'; td.dataset.id = mf.id; td.dataset.row = ri; td.subformula = mf;
+          td.addEventListener('click', function() { handleCellClick(td, mf, row, table, ck); });
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      tbl.appendChild(tbody); c.appendChild(tbl); updateHeaderVisibility();
+    }
+
+    function updateHeaderVisibility() { document.querySelectorAll('th[data-id]').forEach(function(th) { const id = th.dataset.id; if (collapsedColumns.has(id)) { th.classList.add('collapsed', 'hidden-column'); } else { th.classList.remove('collapsed', 'hidden-column'); } }); }
+
+    function toggleColumn(cid, sf) {
+      if (collapsedColumns.has(cid)) {
+        collapsedColumns.delete(cid);
+        document.querySelectorAll('td[data-id="' + cid + '"]').forEach(function(td) { if (!td.classList.contains('atom-cell') && !td.classList.contains('main-statement-cell')) td.classList.remove('hidden-column'); });
+      } else {
+        collapsedColumns.add(cid);
+        document.querySelectorAll('td[data-id="' + cid + '"]').forEach(function(td) { if (!td.classList.contains('atom-cell') && !td.classList.contains('main-statement-cell')) td.classList.add('hidden-column'); });
+        removeParentFromChildren(cid, sf);
+      }
+      updateHeaderVisibility();
+    }
+
+    function cycleCellValue(cell, ck) {
+      const cur = cell.textContent.trim(); let next;
+      if (cur === '' || cur === '·') next = 'T'; else if (cur === 'T') next = 'F'; else next = '';
+      cell.textContent = next;
+      if (next) userAnswers[ck] = next; else delete userAnswers[ck];
+    }
+
+    function handleAtomCellClick(cell, atom, ck) {
+      if (currentlySelectedCell !== ck) {
+        document.querySelectorAll('td').forEach(function(td) { td.classList.remove('selected', 'operand-left', 'operand-right', 'dimmed', 'col-selected', 'col-operand-left', 'col-operand-right', 'col-dimmed'); });
+        cellClickCount = {}; currentlySelectedCell = ck;
+      }
+      if (!cellClickCount[ck]) cellClickCount[ck] = 0;
+      cellClickCount[ck]++;
+      if (cellClickCount[ck] === 1) {
+        cell.classList.add('selected');
+        document.querySelectorAll('td').forEach(function(td) { if (td !== cell) td.classList.add('dimmed'); });
+      } else cycleCellValue(cell, ck);
+    }
+
+    function handleCellClick(cell, sf, row, table, ck) {
+      // Cell focus mode: selects a specific cell for cycling, and highlights the corresponding scope/operands in the display.
+      // This should clear any column-focus shading.
+      clearColumnFocus();
+
+      if (currentlySelectedCell !== ck) {
+        document.querySelectorAll('td').forEach(function(td) {
+          td.classList.remove('selected','operand-left','operand-right','dimmed');
+        });
+        cellClickCount = {};
+        currentlySelectedCell = ck;
+      }
+      if (!cellClickCount[ck]) cellClickCount[ck] = 0;
+      cellClickCount[ck]++;
+
+      if (cellClickCount[ck] === 1) {
+        // First click: focus + highlight (no cycling yet)
+        expandDirectChildren(sf.id, sf);
+        const highlightId = (cell.classList.contains('main-statement-cell') ? findColumnIdForNode(sf.node) : sf.id);
+        highlightFormulaByColumnId(highlightId);
+
+        cell.classList.add('selected');
+        document.querySelectorAll('td').forEach(function(td) { if (td !== cell) td.classList.add('dimmed'); });
+
+        const n = sf.node;
+        let lo = null, ro = null;
+
+        function childAt(node, i) {
+          if (!node) return null;
+          if (node.type === NodeType.NOT) return node.child || (node.children && node.children[0]) || null;
+          if (i === 0) return node.left || (node.children && node.children[0]) || null;
+          if (i === 1) return node.right || (node.children && node.children[1]) || null;
+          return null;
+        }
+
+        function lookupOperand(opNode) {
+          if (!opNode) return null;
+          if (opNode.type === NodeType.ATOM) return { id: atomNodeMap[opNode.name], node: opNode };
+          const t = serializeFormula(opNode);
+          return table.subformulas.find(function(s) { return s.text === t; }) ||
+                 table.mainFormulas.find(function(s) { return s.text === t; }) ||
+                 null;
+        }
+
+        if (n) {
+          if (n.type === NodeType.NOT) {
+            // Negation has a single operand; treat it as RIGHT (green).
+            ro = lookupOperand(childAt(n, 0));
+          } else {
+            lo = lookupOperand(childAt(n, 0));
+            ro = lookupOperand(childAt(n, 1));
+          }
+        }
+
+        if (lo && lo.id) {
+          document.querySelectorAll('td[data-id="' + lo.id + '"][data-row="' + cell.dataset.row + '"]')
+            .forEach(function(c) { c.classList.remove('dimmed'); c.classList.add('operand-left'); });
+        }
+        if (ro && ro.id) {
+          document.querySelectorAll('td[data-id="' + ro.id + '"][data-row="' + cell.dataset.row + '"]')
+            .forEach(function(c) { c.classList.remove('dimmed'); c.classList.add('operand-right'); });
+        }
+      } else {
+        // Subsequent clicks: cycle value
+        cycleCellValue(cell, ck);
+      }
+    }
+
+    function solveVisibleCells() { 
+      if (!currentTable) return; 
+      currentTable.rows.forEach(function(r, ri) { 
+        currentTable.subformulas.forEach(function(sf) { 
+          if (!collapsedColumns.has(sf.id)) { 
+            const ck = ri + '-' + sf.id, cv = r.subformulas[sf.id] ? 'T' : 'F'; 
+            userAnswers[ck] = cv; 
+          } 
+        });
+        currentTable.mainFormulas.forEach(function(mf) {
+          const ck = ri + '-' + mf.id, cv = r.mainFormulas[mf.id] ? 'T' : 'F';
+          userAnswers[ck] = cv;
+        });
+      }); 
+      renderTable(currentTable); 
+      showFeedback('Visible cells solved!'); 
+    }
+
+    function fillReferenceColumns() {
+      if (!currentTable) return;
+      const rows = currentTable.rows || [];
+      const atoms = currentTable.atoms || [];
+
+      rows.forEach(function(row, ri) {
+        atoms.forEach(function(a) {
+          const ck = 'atom-' + ri + '-' + a;
+          const val = (row.atoms && (a in row.atoms)) ? row.atoms[a] : false;
+          userAnswers[ck] = val ? 'T' : 'F';
+          const td = document.querySelector('td.atom-cell[data-row="' + ri + '"][data-atom="' + a + '"]');
+          if (td) td.textContent = userAnswers[ck];
+        });
+      });
+
+      // Filling reference columns should not leave any focus/highlighting behind.
+      clearCellFocus();
+      clearColumnFocus();
+      clearHighlights();
+      showFeedback('Reference columns filled!');
+    }
+
+
+    function solveAll() { 
+      if (!currentTable) return; 
+      collapsedColumns.clear(); 
+      expandedBy = {}; 
+      currentTable.rows.forEach(function(r, ri) { 
+        currentTable.subformulas.forEach(function(sf) { 
+          const ck = ri + '-' + sf.id, cv = r.subformulas[sf.id] ? 'T' : 'F'; 
+          userAnswers[ck] = cv; 
+        });
+        currentTable.mainFormulas.forEach(function(mf) {
+          const ck = ri + '-' + mf.id, cv = r.mainFormulas[mf.id] ? 'T' : 'F';
+          userAnswers[ck] = cv;
+        });
+      }); 
+      renderTable(currentTable); 
+      showFeedback('All expanded and solved!'); 
+    }
+    
+    function checkWork() {
+      if (!currentTable) return;
+      let ok = 0, bad = 0, emp = 0;
+      document.querySelectorAll('td').forEach(function(td) { td.classList.remove('correct', 'incorrect'); });
+      currentTable.rows.forEach(function(r, ri) {
+        currentTable.atoms.forEach(function(a) { const ck = 'atom-' + ri + '-' + a, uv = userAnswers[ck], cv = r.atoms[a] ? 'T' : 'F'; const cell = document.querySelector('td.atom-cell[data-row="' + ri + '"][data-atom="' + a + '"]'); if (!uv) emp++; else if (uv === cv) { ok++; if (cell) cell.classList.add('correct'); } else { bad++; if (cell) cell.classList.add('incorrect'); } });
+        currentTable.subformulas.forEach(function(sf) { const ck = ri + '-' + sf.id, uv = userAnswers[ck], cv = r.subformulas[sf.id] ? 'T' : 'F'; const cell = document.querySelector('td.editable[data-row="' + ri + '"][data-id="' + sf.id + '"]'); if (!uv) emp++; else if (uv === cv) { ok++; if (cell) cell.classList.add('correct'); } else { bad++; if (cell) cell.classList.add('incorrect'); } });
+        currentTable.mainFormulas.forEach(function(mf) { const ck = ri + '-' + mf.id, uv = userAnswers[ck], cv = r.mainFormulas[mf.id] ? 'T' : 'F'; const cell = document.querySelector('td[data-row="' + ri + '"][data-id="' + mf.id + '"]'); if (!uv) emp++; else if (uv === cv) { ok++; if (cell) cell.classList.add('correct'); } else { bad++; if (cell) cell.classList.add('incorrect'); } });
+      });
+      if (bad === 0 && emp === 0) showFeedback('Perfect! All ' + ok + ' cells correct! 🎉');
+      else if (bad === 0) showFeedback(ok + ' correct, ' + emp + ' empty. Keep going!');
+      else showError(ok + ' correct, ' + bad + ' incorrect, ' + emp + ' empty.');
+    }
+    
+    function clearReferenceColumns() { const na = {}; for (const k in userAnswers) { if (!k.startsWith('atom-')) na[k] = userAnswers[k]; } userAnswers = na; renderTable(currentTable); hideFeedback(); hideError(); }
+    function clearOperationColumns() { const na = {}; for (const k in userAnswers) { if (k.startsWith('atom-')) na[k] = userAnswers[k]; } userAnswers = na; cellClickCount = {}; currentlySelectedCell = null; renderTable(currentTable); hideFeedback(); hideError(); }
+
+    function generateTable() {
+      hideError(); hideFeedback();
+      const formulas = getStatementFormulas();
+      if (formulas.length === 0) { showError('Please enter at least one statement.'); return; }
+      
+      try {
+        idCounter = 0;
+        const asts = formulas.map(function(f) { return parseFormula(f); });
+        const table = generateTruthTable(asts);
+        currentTable = table; 
+        userAnswers = {}; 
+        collapsedColumns = new Set(); 
+        expandedBy = {}; 
+        cellClickCount = {}; 
+        currentlySelectedCell = null;
+        
+        table.subformulas.forEach(function(sf) { collapsedColumns.add(sf.id); });
+        
+        renderFormulaDisplay(formulas); 
+        renderTable(table);
+        document.getElementById('action-buttons').style.display = 'flex';
+        document.getElementById('clear-buttons').style.display = 'flex';
+      } catch (e) { showError('Error: ' + e.message); console.error(e); }
+    }
+
+    document.getElementById('add-statement').addEventListener('click', addStatement);
+    document.getElementById('generate').addEventListener('click', generateTable);
+    document.getElementById('fill-reference').addEventListener('click', fillReferenceColumns);
+    document.getElementById('check-work').addEventListener('click', checkWork);
+    document.getElementById('solve-visible').addEventListener('click', function() { requestPasskey(solveVisibleCells); });
+    document.getElementById('solve-all').addEventListener('click', function() { requestPasskey(solveAll); });
+    document.getElementById('clear-reference').addEventListener('click', clearReferenceColumns);
+    document.getElementById('clear-ops').addEventListener('click', clearOperationColumns);addStatement();
+  
+    // Clear any focus/highlighting when clicking outside interactive table areas.
+    // Use pointerdown in capture phase so it runs even if other handlers stop propagation.
+    document.addEventListener('pointerdown', function(e) {
+      // Clicking anywhere that is NOT a table cell/header clears focus + highlighting.
+      if (e.target.closest('td') || e.target.closest('th')) return;
+      clearCellFocus();
+      clearColumnFocus();
+      clearHighlights();
+    }, true);
+
+</script>
+</body>
+</html>
